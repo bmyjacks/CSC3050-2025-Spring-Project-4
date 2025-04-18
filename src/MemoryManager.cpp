@@ -3,10 +3,11 @@
  */
 
 #include "MemoryManager.h"
-#include "Debug.h"
 
 #include <cstdio>
 #include <string>
+
+#include "Debug.h"
 
 MemoryManager::MemoryManager() {
   this->cache = nullptr;

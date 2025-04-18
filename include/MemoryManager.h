@@ -8,7 +8,6 @@
 
 #include <cstdint>
 #include <cstdio>
-
 #include <elfio/elfio.hpp>
 
 #include "Cache.h"
@@ -16,7 +15,7 @@
 class Cache;
 
 class MemoryManager {
-public:
+ public:
   MemoryManager();
   ~MemoryManager();
 
@@ -46,7 +45,7 @@ public:
 
   void setCache(Cache *cache);
 
-private:
+ private:
   uint32_t getFirstEntryId(uint32_t addr);
   uint32_t getSecondEntryId(uint32_t addr);
   uint32_t getPageOffset(uint32_t addr);

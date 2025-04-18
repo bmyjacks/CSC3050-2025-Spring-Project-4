@@ -1,0 +1,3 @@
+# Based on https://google.github.io/styleguide/cppguide.html
+BasedOnStyle: Google
+Language: Cpp

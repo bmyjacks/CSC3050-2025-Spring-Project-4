@@ -1,7 +1,7 @@
+#include "Cache.h"
+
 #include <cstdio>
 #include <cstdlib>
-
-#include "Cache.h"
 
 Cache::Cache(MemoryManager *manager, Policy policy, Cache *lowerCache) {
   this->referenceCounter = 0;
@@ -53,7 +53,9 @@ uint8_t Cache::getByte(uint32_t addr, uint32_t *cycles) {
     this->statistics.numHit++;
     this->statistics.totalCycles += this->policy.hitLatency;
     this->blocks[blockId].lastReference = this->referenceCounter;
-    if (cycles) *cycles = this->policy.hitLatency;
+    if (cycles) {
+      *cycles = this->policy.hitLatency;
+    }
     return this->blocks[blockId].data[offset];
   }
 
@@ -86,8 +88,9 @@ void Cache::setByte(uint32_t addr, uint8_t val, uint32_t *cycles) {
     this->blocks[blockId].modified = true;
     this->blocks[blockId].lastReference = this->referenceCounter;
     this->blocks[blockId].data[offset] = val;
-    if (cycles)
+    if (cycles) {
       *cycles = this->policy.hitLatency;
+    }
     return;
   }
 
@@ -138,11 +141,13 @@ void Cache::printStatistics() {
   printf("Num Write: %d\n", this->statistics.numWrite);
   printf("Num Hit: %d\n", this->statistics.numHit);
   printf("Num Miss: %d\n", this->statistics.numMiss);
-  
+
   float totalAccess = this->statistics.numHit + this->statistics.numMiss;
-  float missRate = totalAccess > 0 ? (this->statistics.numMiss * 100.0f / totalAccess) : 0.0f;
+  float missRate = totalAccess > 0
+                       ? (this->statistics.numMiss * 100.0f / totalAccess)
+                       : 0.0f;
   printf("Miss Rate: %.2f%%\n", missRate);
-  
+
   printf("Total Cycles: %lu\n", this->statistics.totalCycles);
   if (this->lowerCache != nullptr) {
     printf("---------- LOWER CACHE ----------\n");
@@ -205,9 +210,12 @@ void Cache::loadBlockFromLowerLevel(uint32_t addr, uint32_t *cycles) {
   for (uint32_t i = blockAddrBegin; i < blockAddrBegin + blockSize; ++i) {
     if (this->lowerCache == nullptr) {
       b.data[i - blockAddrBegin] = this->memory->getByteNoCache(i);
-      if (cycles) *cycles = 100;
-    } else 
+      if (cycles) {
+        *cycles = 100;
+      }
+    } else {
       b.data[i - blockAddrBegin] = this->lowerCache->getByte(i, cycles);
+    }
   }
 
   // Find replace block
@@ -216,7 +224,7 @@ void Cache::loadBlockFromLowerLevel(uint32_t addr, uint32_t *cycles) {
   uint32_t blockIdEnd = (id + 1) * this->policy.associativity;
   uint32_t replaceId = this->getReplacementBlockId(blockIdBegin, blockIdEnd);
   Block replaceBlock = this->blocks[replaceId];
-  
+
   if (replaceBlock.valid && replaceBlock.modified) {
     this->writeBlockToLowerLevel(replaceBlock);
     this->statistics.totalCycles += this->policy.missLatency;
@@ -228,8 +236,9 @@ void Cache::loadBlockFromLowerLevel(uint32_t addr, uint32_t *cycles) {
 uint32_t Cache::getReplacementBlockId(uint32_t begin, uint32_t end) {
   // Find invalid block first
   for (uint32_t i = begin; i < end; ++i) {
-    if (!this->blocks[i].valid)
+    if (!this->blocks[i].valid) {
       return i;
+    }
   }
 
   // Otherwise use LRU
@@ -260,10 +269,12 @@ void Cache::writeBlockToLowerLevel(Cache::Block &b) {
 bool Cache::isPowerOfTwo(uint32_t n) { return n > 0 && (n & (n - 1)) == 0; }
 
 uint32_t Cache::log2i(uint32_t val) {
-  if (val == 0)
+  if (val == 0) {
     return uint32_t(-1);
-  if (val == 1)
+  }
+  if (val == 1) {
     return 0;
+  }
   uint32_t ret = 0;
   while (val > 1) {
     val >>= 1;
@@ -299,11 +310,11 @@ uint32_t Cache::getAddr(Cache::Block &b) {
 }
 
 uint8_t Cache::read(uint32_t addr) {
-    uint32_t cycles;
-    return getByte(addr, &cycles);
+  uint32_t cycles;
+  return getByte(addr, &cycles);
 }
 
 void Cache::write(uint32_t addr, uint8_t val) {
-    uint32_t cycles;
-    setByte(addr, val, &cycles);
+  uint32_t cycles;
+  setByte(addr, val, &cycles);
 }
