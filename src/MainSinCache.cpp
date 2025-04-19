@@ -1,12 +1,10 @@
 #include <cstdint>
-#include <cstdlib>
 #include <fstream>
 #include <iostream>
 #include <string>
 #include <vector>
 
 #include "Cache.h"
-#include "Debug.h"
 #include "MemoryManager.h"
 
 static bool verbose = false;
@@ -28,19 +26,15 @@ auto main(const int argc, char **argv) -> int {
   std::ofstream csvFile(std::string(traceFilePath) + ".csv");
   csvFile << "cacheSize,blockSize,associativity,missRate,totalCycles\n";
 
-  for (uint32_t cacheSize = 4 * 1024; cacheSize <= 1024 * 1024;
-       cacheSize *= 4) {
-    for (uint32_t blockSize = 32; blockSize <= 256; blockSize *= 2) {
-      for (uint32_t associativity = 2; associativity <= 32;
-           associativity *= 2) {
-        const uint32_t blockNum = cacheSize / blockSize;
-        if (blockNum % associativity != 0) {
-          continue;
-        }
+  constexpr auto cacheSize = 16 * 1024;  // 16KB
+  constexpr auto blockSize = 64;         // 64B
+  constexpr auto associativity = 1;      // Direct-mapped
 
-        simulateCache(csvFile, cacheSize, blockSize, associativity);
-      }
-    }
+  try {
+    simulateCache(csvFile, cacheSize, blockSize, associativity);
+  } catch (const std::exception &e) {
+    std::cerr << std::format("Error: {}\n", e.what());
+    return -1;
   }
 
   std::cout << std::format("Result has been written to {}\n",
@@ -97,61 +91,92 @@ static auto createSingleLevelPolicy(const uint32_t cacheSize,
 void simulateCache(std::ofstream &csvFile, const uint32_t cacheSize,
                    const uint32_t blockSize, const uint32_t associativity) {
   const auto policy =
-      createSingleLevelPolicy(cacheSize, blockSize, associativity);
+      createSingleLevelPolicy(cacheSize >> 1U, blockSize, associativity);
 
-  MemoryManager *memory = nullptr;
-  Cache *cache = nullptr;
-  memory = new MemoryManager();
-  cache = new Cache(memory, policy, nullptr);
-  memory->setCache(cache);
-  cache->printInfo(false);
+  auto memoryManager = MemoryManager();
+  auto instCache = Cache(&memoryManager, policy, nullptr);
+  auto dataCache = Cache(&memoryManager, policy, nullptr);
+
+  instCache.printInfo(false);
+  dataCache.printInfo(false);
+
+  auto cacheOperation = [](Cache &cache, const char &operation,
+                           const uint32_t &addr) {
+    switch (operation) {
+      case 'r': {
+        cache.getByte(addr);
+        break;
+      }
+      case 'w': {
+        cache.setByte(addr, 0);
+        break;
+      }
+      default: {
+        throw std::runtime_error(std::format(
+            "Illegal operation {} to address 0x{:x}", operation, addr));
+      }
+    }
+  };
 
   // Read and execute trace in cache-trace/ folder
   std::ifstream trace(traceFilePath);
   if (!trace.is_open()) {
-    printf("Unable to open file %s\n", traceFilePath);
-    exit(-1);
+    throw std::runtime_error(
+        std::format("Unable to open file {}", traceFilePath));
   }
 
-  char op = 0;  //'r' for read, 'w' for write
+  char operation = 0;  //'r' for read, 'w' for write
   uint32_t addr = 0;
   char instType = 'I';  // 'I' for instruction, 'D' for data
-  while (trace >> op >> std::hex >> addr >> instType) {
+  while (trace >> operation >> std::hex >> addr >> instType) {
     if (verbose) {
-      printf("%c %x\n", op, addr);
+      std::cout << std::format("Operation: {} Address: 0x{:x} Type: {}\n",
+                               operation, addr, instType);
     }
-    if (!memory->isPageExist(addr)) {
-      memory->addPage(addr);
+
+    if (!memoryManager.isPageExist(addr)) {
+      memoryManager.addPage(addr);
     }
-    switch (op) {
-      case 'r':
-        cache->getByte(addr);
+
+    switch (instType) {
+      case 'I': {
+        cacheOperation(instCache, operation, addr);
         break;
-      case 'w':
-        cache->setByte(addr, 0);
+      }
+      case 'D': {
+        cacheOperation(dataCache, operation, addr);
         break;
-      default:
-        dbgprintf("Illegal op %c\n", op);
-        exit(-1);
+      }
+      default: {
+        throw std::runtime_error(std::format(
+            "Illegal instruction type {} to address 0x{:x}", instType, addr));
+      }
     }
 
     if (verbose) {
-      cache->printInfo(true);
+      dataCache.printInfo(true);
     }
 
     if (isSingleStep) {
-      printf("Press Enter to Continue...");
-      getchar();
+      std::cout << "Press Enter to Continue...";
+      std::cin.get();
     }
   }
 
   // Output Simulation Results
-  cache->printStatistics();
-  const auto missRate = static_cast<float>(cache->statistics.numMiss) /
-                        (cache->statistics.numHit + cache->statistics.numMiss);
-  csvFile << cacheSize << "," << blockSize << "," << associativity << ","
-          << missRate << "," << cache->statistics.totalCycles << std::endl;
+  std::cout << "Instruction Cache Statistics:\n";
+  instCache.printStatistics();
+  std::cout << "Data Cache Statistics:\n";
+  dataCache.printStatistics();
 
-  delete cache;
-  delete memory;
+  const auto missCycles =
+      instCache.statistics.numMiss + dataCache.statistics.numMiss;
+  const auto totalCycles = std::max(instCache.statistics.totalCycles,
+                                    dataCache.statistics.totalCycles);
+
+  const auto missRate =
+      static_cast<float>(missCycles) / static_cast<float>(totalCycles);
+
+  csvFile << std::format("{}, {}, {}, {}, {}\n", cacheSize, blockSize,
+                         associativity, missRate, totalCycles);
 }
