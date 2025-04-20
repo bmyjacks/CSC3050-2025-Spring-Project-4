@@ -2,99 +2,75 @@
 #define CACHE_H
 
 #include <cstdint>
+#include <memory>
 #include <vector>
 
 #include "MemoryManager.h"
 
-class MemoryManager;
-
-class ICacheAccess {
- public:
-  virtual uint8_t read(uint32_t addr) = 0;
-  virtual void write(uint32_t addr, uint8_t val) = 0;
-  virtual ~ICacheAccess() = default;
-};
-
-using CacheLevelConfig = struct {
-  uint32_t size;
-  uint32_t blockSize;
-  uint32_t associativity;
-  uint32_t hitLatency;
-  uint32_t missLatency;
-};
-
-class Cache : public ICacheAccess {
+class Cache {
  public:
   struct Policy {
-    // In bytes, must be power of 2
-    uint32_t cacheSize;
-    uint32_t blockSize;
-    uint32_t blockNum;
-    uint32_t associativity;
-    uint32_t hitLatency;
-    uint32_t missLatency;
+    uint32_t cacheSize;      // In bytes, must be power of 2
+    uint32_t blockSize;      // In bytes, must be power of 2
+    uint32_t blockNum;       // Total number of blocks
+    uint32_t associativity;  // Number of blocks per set
+    uint32_t hitLatency;     // Latency for a cache hit
+    uint32_t missLatency;    // Latency for a cache miss
   };
 
   struct Block {
-    bool valid;
-    bool modified;
-    uint32_t tag;
-    uint32_t id;
-    uint32_t size;
-    uint32_t lastReference;
-    std::vector<uint8_t> data;
-    Block() {}
-    Block(const Block &b)
-        : valid(b.valid),
-          modified(b.modified),
-          tag(b.tag),
-          id(b.id),
-          size(b.size) {
-      data = b.data;
-    }
+    bool valid;                 // Whether the block is valid
+    bool modified;              // Whether the block is modified
+    uint32_t tag;               // Tag of the block
+    uint32_t id;                // ID of the block
+    uint32_t size;              // Size of the block in bytes
+    uint32_t lastReference;     // Last reference timestamp
+    std::vector<uint8_t> data;  // Data stored in the block
   };
 
   struct Statistics {
-    uint32_t numRead;
-    uint32_t numWrite;
-    uint32_t numHit;
-    uint32_t numMiss;
-    uint64_t totalCycles;
+    uint32_t numRead;      // Number of read operations
+    uint32_t numWrite;     // Number of write operations
+    uint32_t numHit;       // Number of cache hits
+    uint32_t numMiss;      // Number of cache misses
+    uint32_t totalCycles;  // Total cycles spent
   };
 
-  Cache(MemoryManager *manager, Policy policy, Cache *lowerCache = nullptr);
+  Cache(std::shared_ptr<MemoryManager> manager, const Policy &policy,
+        std::unique_ptr<Cache> lowerCache);
 
-  bool inCache(uint32_t addr);
-  uint32_t getBlockId(uint32_t addr);
-  uint8_t getByte(uint32_t addr, uint32_t *cycles = nullptr);
-  void setByte(uint32_t addr, uint8_t val, uint32_t *cycles = nullptr);
-
-  void printInfo(bool verbose);
-  void printStatistics();
-  Statistics statistics;
-
-  uint8_t read(uint32_t addr) override;
-  void write(uint32_t addr, uint8_t val) override;
+  // Public Methods
+  auto read(uint32_t addr) -> uint8_t;
+  void write(uint32_t addr, uint8_t val);
+  auto inCache(uint32_t addr) -> bool;
+  [[nodiscard]] auto getBlockId(uint32_t addr) -> uint32_t;
+  auto getByte(uint32_t addr) -> uint8_t;
+  void setByte(uint32_t addr, uint8_t val);
+  void printInfo(bool verbose) const;
+  void printStatistics() const;
+  [[nodiscard]] auto getPolicy() const -> Policy { return policy; }
+  [[nodiscard]] auto getStatistics() const -> Statistics { return statistics; }
 
  private:
-  uint32_t referenceCounter;
-  MemoryManager *memory;
-  Cache *lowerCache;
+  uint32_t referenceCounter;  // Reference counter for LRU
+  std::shared_ptr<MemoryManager> memoryManager;
+  std::unique_ptr<Cache> lowerCache;
   Policy policy;
   std::vector<Block> blocks;
+  Statistics statistics;
 
-  void initCache();
-  void loadBlockFromLowerLevel(uint32_t addr, uint32_t *cycles);
-  uint32_t getReplacementBlockId(uint32_t begin, uint32_t end);
-  void writeBlockToLowerLevel(Block &b);
-  // Utility Functions
-  bool isPolicyValid();
-  bool isPowerOfTwo(uint32_t n);
-  uint32_t log2i(uint32_t val);
-  uint32_t getTag(uint32_t addr);
-  uint32_t getId(uint32_t addr);
-  uint32_t getOffset(uint32_t addr);
-  uint32_t getAddr(Block &b);
+  void loadBlockFromLowerLevel(uint32_t addr);
+  [[nodiscard]] auto getReplacementBlockId(uint32_t begin, uint32_t end) const
+      -> uint32_t;
+  void writeBlockToLowerLevel(Block &block);
+
+  auto isPolicyValid() -> bool;
+  static auto isPowerOfTwo(uint32_t n) -> bool;
+  static auto log2i(uint32_t val) -> uint32_t;
+  auto getTag(uint32_t addr) -> uint32_t;
+  auto getId(uint32_t addr) -> uint32_t;
+  auto getOffset(uint32_t addr) -> uint32_t;
+  auto getAddr(Block &block) -> uint32_t;
 };
 
 #endif

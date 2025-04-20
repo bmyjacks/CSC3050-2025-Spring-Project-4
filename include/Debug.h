@@ -12,7 +12,7 @@
 
 #define DEBUG
 
-inline void dbgprintf(const char *format, ...) {
+[[deprecated]] inline void dbgprintf(const char *format, ...) {
 #ifdef DEBUG
   char buf[BUFSIZ];
   va_list args;

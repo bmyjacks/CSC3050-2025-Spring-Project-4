@@ -93,9 +93,9 @@ void simulateCache(std::ofstream &csvFile, const uint32_t cacheSize,
   const auto policy =
       createSingleLevelPolicy(cacheSize >> 1U, blockSize, associativity);
 
-  auto memoryManager = MemoryManager();
-  auto instCache = Cache(&memoryManager, policy, nullptr);
-  auto dataCache = Cache(&memoryManager, policy, nullptr);
+  auto memoryManager = std::make_shared<MemoryManager>();
+  auto instCache = Cache(memoryManager, policy, nullptr);
+  auto dataCache = Cache(memoryManager, policy, nullptr);
 
   instCache.printInfo(false);
   dataCache.printInfo(false);
@@ -134,8 +134,8 @@ void simulateCache(std::ofstream &csvFile, const uint32_t cacheSize,
                                operation, addr, instType);
     }
 
-    if (!memoryManager.isPageExist(addr)) {
-      memoryManager.addPage(addr);
+    if (!memoryManager->isPageExist(addr)) {
+      memoryManager->addPage(addr);
     }
 
     switch (instType) {
@@ -170,9 +170,9 @@ void simulateCache(std::ofstream &csvFile, const uint32_t cacheSize,
   dataCache.printStatistics();
 
   const auto missCycles =
-      instCache.statistics.numMiss + dataCache.statistics.numMiss;
-  const auto totalCycles = std::max(instCache.statistics.totalCycles,
-                                    dataCache.statistics.totalCycles);
+      instCache.getStatistics().numMiss + dataCache.getStatistics().numMiss;
+  const auto totalCycles = std::max(instCache.getStatistics().totalCycles,
+                                    dataCache.getStatistics().totalCycles);
 
   const auto missRate =
       static_cast<float>(missCycles) / static_cast<float>(totalCycles);
