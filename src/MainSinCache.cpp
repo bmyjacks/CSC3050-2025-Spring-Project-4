@@ -7,43 +7,27 @@
 #include "Cache.h"
 #include "MemoryManager.h"
 
+class InstructionCache final : public Cache {
+ public:
+  InstructionCache(MemoryManager *memoryManager, const Policy &policy,
+                   Cache *lowerCache)
+      : Cache(memoryManager, policy, lowerCache) {}
+
+  void writeBlockToLowerLevel(Block &block) override {};
+};
+
+class DataCache final : public Cache {
+ public:
+  DataCache(MemoryManager *memoryManager, const Policy &policy,
+            Cache *lowerCache)
+      : Cache(memoryManager, policy, lowerCache) {}
+};
+
 static bool verbose = false;
 static bool isSingleStep = false;
-static char *traceFilePath;
+static std::string traceFilePath;
 
-static auto parseParameters(int argc, char **argv) -> bool;
-static void printUsage();
-static void simulateCache(std::ofstream &csvFile, uint32_t cacheSize,
-                          uint32_t blockSize, uint32_t associativity);
-
-auto main(const int argc, char **argv) -> int {
-  if (!parseParameters(argc, argv)) {
-    printUsage();
-    return -1;
-  }
-
-  // Open CSV file and write header
-  std::ofstream csvFile(std::string(traceFilePath) + ".csv");
-  csvFile << "cacheSize,blockSize,associativity,missRate,totalCycles\n";
-
-  constexpr auto cacheSize = 16 * 1024;  // 16KB
-  constexpr auto blockSize = 64;         // 64B
-  constexpr auto associativity = 1;      // Direct-mapped
-
-  try {
-    simulateCache(csvFile, cacheSize, blockSize, associativity);
-  } catch (const std::exception &e) {
-    std::cerr << std::format("Error: {}\n", e.what());
-    return -1;
-  }
-
-  std::cout << std::format("Result has been written to {}\n",
-                           std::string(traceFilePath) + ".csv");
-  csvFile.close();
-  return 0;
-}
-
-auto parseParameters(const int argc, char **argv) -> bool {
+static auto parseParameters(const int argc, char **argv) -> bool {
   for (int i = 1; i < argc; ++i) {
     if (argv[i][0] == '-') {
       switch (argv[i][1]) {
@@ -60,20 +44,20 @@ auto parseParameters(const int argc, char **argv) -> bool {
         }
       }
     } else {
-      if (traceFilePath == nullptr) {
-        traceFilePath = argv[i];
+      if (traceFilePath.empty()) {
+        traceFilePath = std::string(argv[i]);
       } else {
         return false;
       }
     }
   }
 
-  return traceFilePath != nullptr;
+  return !traceFilePath.empty();
 }
 
 void printUsage() {
-  std::cout << "Usage: CacheSim trace-file [-s] [-v]\n";
-  std::cout << "Parameters: -s single step, -v verbose output\n";
+  std::print("Usage: CacheSim trace-file [-s] [-v]\n");
+  std::print("Parameters: -s single step, -v verbose output\n");
 }
 
 static auto createSingleLevelPolicy(const uint32_t cacheSize,
@@ -93,22 +77,25 @@ void simulateCache(std::ofstream &csvFile, const uint32_t cacheSize,
   const auto policy =
       createSingleLevelPolicy(cacheSize >> 1U, blockSize, associativity);
 
-  auto memoryManager = std::make_shared<MemoryManager>();
-  auto instCache = Cache(memoryManager, policy, nullptr);
-  auto dataCache = Cache(memoryManager, policy, nullptr);
+  auto memoryManager = MemoryManager();
+  auto instCache = InstructionCache(&memoryManager, policy, nullptr);
+  auto dataCache = DataCache(&memoryManager, policy, nullptr);
 
-  instCache.printInfo(false);
-  dataCache.printInfo(false);
+  std::print("=== Instruction Cache ===\n");
+  instCache.printInfo(verbose);
+
+  std::print("\n=== Data Cache ===\n");
+  dataCache.printInfo(verbose);
 
   auto cacheOperation = [](Cache &cache, const char &operation,
                            const uint32_t &addr) {
     switch (operation) {
       case 'r': {
-        cache.getByte(addr);
+        cache.read(addr);
         break;
       }
       case 'w': {
-        cache.setByte(addr, 0);
+        cache.write(addr, 0);
         break;
       }
       default: {
@@ -130,12 +117,12 @@ void simulateCache(std::ofstream &csvFile, const uint32_t cacheSize,
   char instType = 'I';  // 'I' for instruction, 'D' for data
   while (trace >> operation >> std::hex >> addr >> instType) {
     if (verbose) {
-      std::cout << std::format("Operation: {} Address: 0x{:x} Type: {}\n",
-                               operation, addr, instType);
+      std::print("Operation: {} Address: 0x{:x} Type: {}\n", operation, addr,
+                 instType);
     }
 
-    if (!memoryManager->isPageExist(addr)) {
-      memoryManager->addPage(addr);
+    if (!memoryManager.isPageExist(addr)) {
+      memoryManager.addPage(addr);
     }
 
     switch (instType) {
@@ -154,19 +141,20 @@ void simulateCache(std::ofstream &csvFile, const uint32_t cacheSize,
     }
 
     if (verbose) {
+      instCache.printInfo(true);
       dataCache.printInfo(true);
     }
 
     if (isSingleStep) {
-      std::cout << "Press Enter to Continue...";
+      std::print("Press Enter to Continue...");
       std::cin.get();
     }
   }
 
   // Output Simulation Results
-  std::cout << "Instruction Cache Statistics:\n";
+  std::print("=== Instruction Cache ===\n");
   instCache.printStatistics();
-  std::cout << "Data Cache Statistics:\n";
+  std::print("\n=== Data Cache ===\n");
   dataCache.printStatistics();
 
   const auto missCycles =
@@ -179,4 +167,32 @@ void simulateCache(std::ofstream &csvFile, const uint32_t cacheSize,
 
   csvFile << std::format("{}, {}, {}, {}, {}\n", cacheSize, blockSize,
                          associativity, missRate, totalCycles);
+}
+
+auto main(const int argc, char **argv) -> int {
+  if (!parseParameters(argc, argv)) {
+    printUsage();
+    return -1;
+  }
+
+  // Open CSV file and write header
+  std::ofstream csvFile(std::string(traceFilePath) + ".csv");
+  csvFile << "cacheSize,blockSize,associativity,missRate,totalCycles\n";
+
+  constexpr auto cacheSize = 16 * 1024;  // 16KB
+  constexpr auto blockSize = 64;         // 64B
+  constexpr auto associativity = 1;      // Direct-mapped
+
+  try {
+    simulateCache(csvFile, cacheSize, blockSize, associativity);
+  } catch (const std::exception &e) {
+    std::print(std::cerr, "Error: {}\n", e.what());
+    return -1;
+  }
+
+  std::print("Result has been written to {}\n",
+             std::string(traceFilePath) + ".csv");
+  csvFile.close();
+
+  return 0;
 }

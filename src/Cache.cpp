@@ -7,17 +7,16 @@
 #include <print>
 #include <ranges>
 
-Cache::Cache(std::shared_ptr<MemoryManager> manager, const Policy &policy,
-             std::unique_ptr<Cache> lowerCache)
-    : statistics({.numRead = 0,
+Cache::Cache(MemoryManager *manager, const Policy &policy, Cache *lowerCache)
+    : referenceCounter(0),
+      memoryManager(manager),
+      lowerCache(lowerCache),
+      policy(policy),
+      statistics({.numRead = 0,
                   .numWrite = 0,
                   .numHit = 0,
                   .numMiss = 0,
-                  .totalCycles = 0}),
-      referenceCounter(0),
-      memoryManager(std::move(manager)),
-      lowerCache(std::move(lowerCache)),
-      policy(policy) {
+                  .totalCycles = 0}) {
   if (!isPolicyValid()) {
     throw std::runtime_error("Invalid cache policy");
   }
@@ -60,25 +59,20 @@ auto Cache::getBlockId(const uint32_t addr) -> uint32_t {
 
 auto Cache::getByte(const uint32_t addr) -> uint8_t {
   ++referenceCounter;
-  ++statistics.numRead;
 
   auto blockId = getBlockId(addr);
   if (blockId != -1) {  // Hit
-    ++statistics.numHit;
 
     const auto offset = getOffset(addr);
-    statistics.totalCycles += policy.hitLatency;
     blocks[blockId].lastReference = referenceCounter;
 
     return blocks[blockId].data[offset];
   }
 
   // Miss
-  ++statistics.numMiss;
-  statistics.totalCycles += policy.missLatency;
   loadBlockFromLowerLevel(addr);
 
-  // The block is in top level cache now, return directly
+  // The block is in the top level cache now, return directly
   blockId = getBlockId(addr);
   if (blockId != -1) {
     const auto offset = getOffset(addr);
@@ -91,13 +85,9 @@ auto Cache::getByte(const uint32_t addr) -> uint8_t {
 
 void Cache::setByte(const uint32_t addr, const uint8_t val) {
   ++referenceCounter;
-  ++statistics.numWrite;
 
   auto blockId = getBlockId(addr);
   if (blockId != -1) {  // Hit
-
-    statistics.numHit++;
-    statistics.totalCycles += policy.hitLatency;
     blocks[blockId].modified = true;
     blocks[blockId].lastReference = referenceCounter;
 
@@ -108,9 +98,6 @@ void Cache::setByte(const uint32_t addr, const uint8_t val) {
   }
 
   // Miss
-  ++statistics.numMiss;
-  statistics.totalCycles += policy.missLatency;
-
   loadBlockFromLowerLevel(addr);
 
   blockId = getBlockId(addr);
@@ -190,7 +177,7 @@ auto Cache::isPolicyValid() -> bool {
 void Cache::loadBlockFromLowerLevel(const uint32_t addr) {
   const auto blockSize = policy.blockSize;
 
-  // Initialize new block from memory
+  // Initialize a new block from memory
   Block block = {.valid = true,
                  .modified = false,
                  .tag = getTag(addr),
@@ -204,6 +191,15 @@ void Cache::loadBlockFromLowerLevel(const uint32_t addr) {
   const uint32_t blockAddrBegin = addr & mask;
 
   if (lowerCache) {
+    ++lowerCache->statistics.numRead;
+    if (lowerCache->inCache(blockAddrBegin)) {
+      ++lowerCache->statistics.numHit;
+      lowerCache->statistics.totalCycles += lowerCache->policy.hitLatency;
+    } else {
+      ++lowerCache->statistics.numMiss;
+      lowerCache->statistics.totalCycles += lowerCache->policy.missLatency;
+    }
+
     for (uint32_t i = blockAddrBegin; i < blockAddrBegin + blockSize; ++i) {
       block.data[i - blockAddrBegin] = lowerCache->getByte(i);
     }
@@ -213,7 +209,7 @@ void Cache::loadBlockFromLowerLevel(const uint32_t addr) {
     }
   }
 
-  // Find block to be replaced
+  // Find a block to be replaced
   const auto idx = getId(addr);
   const uint32_t blockIdBegin = idx * policy.associativity;
   const uint32_t blockIdEnd = (idx + 1) * policy.associativity;
@@ -251,11 +247,11 @@ void Cache::writeBlockToLowerLevel(Block &block) {
   const auto addrBegin = getAddr(block);
 
   if (lowerCache) {
+    ++lowerCache->statistics.numWrite;
     std::ranges::for_each(std::views::iota(0U, block.size),
                           [&](const uint32_t i) {
                             lowerCache->setByte(addrBegin + i, block.data[i]);
                           });
-
   } else {
     std::ranges::for_each(
         std::views::iota(0U, block.size), [&](const uint32_t i) {
@@ -298,8 +294,29 @@ uint32_t Cache::getAddr(Cache::Block &block) {
   return (block.tag << (offsetBits + idBits)) | (block.id << offsetBits);
 }
 
-auto Cache::read(const uint32_t addr) -> uint8_t { return getByte(addr); }
+auto Cache::read(const uint32_t addr) -> uint8_t {
+  ++statistics.numRead;
+
+  if (inCache(addr)) {
+    ++statistics.numHit;
+    statistics.totalCycles += policy.hitLatency;
+  } else {
+    ++statistics.numMiss;
+    statistics.totalCycles += policy.missLatency;
+  }
+
+  return getByte(addr);
+}
 
 void Cache::write(const uint32_t addr, const uint8_t val) {
+  ++statistics.numWrite;
+
+  if (inCache(addr)) {
+    ++statistics.numHit;
+    statistics.totalCycles += policy.hitLatency;
+  } else {
+    ++statistics.numMiss;
+    statistics.totalCycles += policy.missLatency;
+  }
   setByte(addr, val);
 }

@@ -1,8 +1,6 @@
 #ifndef CACHE_H
 #define CACHE_H
 
-#include <cstdint>
-#include <memory>
 #include <vector>
 
 #include "MemoryManager.h"
@@ -36,10 +34,9 @@ class Cache {
     uint32_t totalCycles;  // Total cycles spent
   };
 
-  Cache(std::shared_ptr<MemoryManager> manager, const Policy &policy,
-        std::unique_ptr<Cache> lowerCache);
+  Cache(MemoryManager *manager, const Policy &policy, Cache *lowerCache);
+  virtual ~Cache() = default;
 
-  // Public Methods
   auto read(uint32_t addr) -> uint8_t;
   void write(uint32_t addr, uint8_t val);
   auto inCache(uint32_t addr) -> bool;
@@ -53,8 +50,8 @@ class Cache {
 
  private:
   uint32_t referenceCounter;  // Reference counter for LRU
-  std::shared_ptr<MemoryManager> memoryManager;
-  std::unique_ptr<Cache> lowerCache;
+  MemoryManager *memoryManager;
+  Cache *lowerCache;
   Policy policy;
   std::vector<Block> blocks;
   Statistics statistics;
@@ -62,7 +59,7 @@ class Cache {
   void loadBlockFromLowerLevel(uint32_t addr);
   [[nodiscard]] auto getReplacementBlockId(uint32_t begin, uint32_t end) const
       -> uint32_t;
-  void writeBlockToLowerLevel(Block &block);
+  virtual void writeBlockToLowerLevel(Block &block);
 
   auto isPolicyValid() -> bool;
   static auto isPowerOfTwo(uint32_t n) -> bool;
