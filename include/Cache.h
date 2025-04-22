@@ -45,6 +45,7 @@ class Cache {
   void setByte(uint32_t addr, uint8_t val);
   void printInfo(bool verbose) const;
   void printStatistics() const;
+  void fetch(uint32_t addr);
   [[nodiscard]] auto getPolicy() const -> Policy { return policy; }
   [[nodiscard]] auto getStatistics() const -> Statistics { return statistics; }
 

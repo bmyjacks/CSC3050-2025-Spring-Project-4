@@ -39,6 +39,12 @@ auto Cache::inCache(const uint32_t addr) -> bool {
   return getBlockId(addr) != -1;
 }
 
+void Cache::fetch(const uint32_t addr) {
+  if (const auto blockId = getBlockId(addr); blockId == -1) {
+    loadBlockFromLowerLevel(addr);
+  }
+}
+
 auto Cache::getBlockId(const uint32_t addr) -> uint32_t {
   const auto tag = getTag(addr);
   const auto idx = getId(addr);
@@ -147,10 +153,10 @@ void Cache::printStatistics() const {
 
   std::print("Total Cycles: {}\n", statistics.totalCycles);
 
-  if (lowerCache) {
-    std::print("---------- LOWER CACHE ----------\n");
-    lowerCache->printStatistics();
-  }
+  // if (lowerCache) {
+  //   std::print("---------- LOWER CACHE ----------\n");
+  //   lowerCache->printStatistics();
+  // }
 }
 
 auto Cache::isPolicyValid() -> bool {
