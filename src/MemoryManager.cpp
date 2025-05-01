@@ -1,9 +1,8 @@
 #include "MemoryManager.h"
 
-#include <cstdio>
-#include <string>
-
-#include "Debug.h"
+#include <cstring>
+#include <format>
+#include <iostream>
 
 MemoryManager::MemoryManager() {
   for (uint32_t i = 0; i < 1024; ++i) {
@@ -37,7 +36,7 @@ bool MemoryManager::addPage(uint32_t addr) {
     this->memory[i][j] = new uint8_t[4096];
     memset(this->memory[i][j], 0, 4096);
   } else {
-    dbgprintf("Addr 0x%x already exists and do not need an addPage()!\n", addr);
+    std::cerr << std::format("Addr 0x{:x} already exists!\n", addr);
     return false;
   }
   return true;
@@ -49,7 +48,7 @@ bool MemoryManager::isPageExist(uint32_t addr) {
 
 bool MemoryManager::setByte(uint32_t addr, uint8_t val, uint32_t *cycles) {
   if (!this->isAddrExist(addr)) {
-    dbgprintf("Byte write to invalid addr 0x%x!\n", addr);
+    std::cerr << std::format("Byte write to invalid addr 0x{:x}!\n", addr);
     return false;
   }
 
@@ -62,7 +61,7 @@ bool MemoryManager::setByte(uint32_t addr, uint8_t val, uint32_t *cycles) {
 
 uint8_t MemoryManager::getByte(uint32_t addr, uint32_t *cycles) {
   if (!this->isAddrExist(addr)) {
-    dbgprintf("Byte read to invalid addr 0x%x!\n", addr);
+    std::cerr << std::format("Byte read to invalid addr 0x{:x}!\n", addr);
     return false;
   }
   uint32_t i = this->getFirstEntryId(addr);

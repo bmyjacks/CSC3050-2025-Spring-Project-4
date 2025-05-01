@@ -1,8 +1,7 @@
-#include <cstdint>
+#include <format>
 #include <fstream>
 #include <iostream>
 #include <string>
-#include <vector>
 
 #include "Cache.h"
 #include "MemoryManager.h"
@@ -56,8 +55,8 @@ static auto parseParameters(const int argc, char **argv) -> bool {
 }
 
 void printUsage() {
-  std::print("Usage: CacheSim trace-file [-s] [-v]\n");
-  std::print("Parameters: -s single step, -v verbose output\n");
+  std::cout << std::format("Usage: CacheSim trace-file [-s] [-v]\n");
+  std::cout << std::format("Parameters: -s single step, -v verbose output\n");
 }
 
 static auto createSingleLevelPolicy(const uint32_t cacheSize,
@@ -81,11 +80,12 @@ void simulateCache(std::ofstream &csvFile, const uint32_t cacheSize,
   auto instCache = InstructionCache(&memoryManager, policy, nullptr);
   auto dataCache = DataCache(&memoryManager, policy, nullptr);
 
-  std::print("=== Instruction Cache ===\n");
+  std::cout << std::format("=== Instruction Cache ===\n");
   instCache.printInfo(verbose);
 
-  std::print("\n=== Data Cache ===\n");
+  std::cout << std::format("=== Data Cache ===\n");
   dataCache.printInfo(verbose);
+  std::cout << std::format("\n");
 
   auto cacheOperation = [](Cache &cache, const char &operation,
                            const uint32_t &addr) {
@@ -117,8 +117,8 @@ void simulateCache(std::ofstream &csvFile, const uint32_t cacheSize,
   char instType = 'I';  // 'I' for instruction, 'D' for data
   while (trace >> operation >> std::hex >> addr >> instType) {
     if (verbose) {
-      std::print("Operation: {} Address: 0x{:x} Type: {}\n", operation, addr,
-                 instType);
+      std::cout << std::format("Operation: {} Address: 0x{:x} Type: {}\n",
+                               operation, addr, instType);
     }
 
     if (!memoryManager.isPageExist(addr)) {
@@ -146,15 +146,15 @@ void simulateCache(std::ofstream &csvFile, const uint32_t cacheSize,
     }
 
     if (isSingleStep) {
-      std::print("Press Enter to Continue...");
+      std::cout << std::format("Press Enter to Continue...");
       std::cin.get();
     }
   }
 
   // Output Simulation Results
-  std::print("=== Instruction Cache ===\n");
+  std::cout << std::format("=== Instruction Cache ===\n");
   instCache.printStatistics();
-  std::print("\n=== Data Cache ===\n");
+  std::cout << std::format("=== Data Cache ===\n");
   dataCache.printStatistics();
 
   const auto missCycles =
@@ -186,12 +186,12 @@ auto main(const int argc, char **argv) -> int {
   try {
     simulateCache(csvFile, cacheSize, blockSize, associativity);
   } catch (const std::exception &e) {
-    std::print(std::cerr, "Error: {}\n", e.what());
+    std::cerr << std::format("Error: {}\n", e.what());
     return -1;
   }
 
-  std::print("Result has been written to {}\n",
-             std::string(traceFilePath) + ".csv");
+  std::cout << std::format("Result has been written to {}\n",
+                           std::string(traceFilePath) + ".csv");
   csvFile.close();
 
   return 0;

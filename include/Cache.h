@@ -23,6 +23,7 @@ class Cache {
     uint32_t id;                // ID of the block
     uint32_t size;              // Size of the block in bytes
     uint32_t lastReference;     // Last reference timestamp
+    uint32_t createdAt;         // Timestamp when the block was created
     std::vector<uint8_t> data;  // Data stored in the block
   };
 
@@ -35,7 +36,7 @@ class Cache {
   };
 
   Cache(MemoryManager *manager, const Policy &policy, Cache *lowerCache);
-  virtual ~Cache() = default;
+  virtual ~Cache();
 
   auto read(uint32_t addr) -> uint8_t;
   void write(uint32_t addr, uint8_t val);
@@ -46,29 +47,36 @@ class Cache {
   void printInfo(bool verbose) const;
   void printStatistics() const;
   void fetch(uint32_t addr);
+  void setFifo(const bool enable) { enableFifo = enable; }
+  void setVictimCache(bool enable);
   [[nodiscard]] auto getPolicy() const -> Policy { return policy; }
-  [[nodiscard]] auto getStatistics() const -> Statistics { return statistics; }
+  [[nodiscard]] auto getLowerCache() const -> Cache * { return lowerCache; }
+  [[nodiscard]] auto getStatistics() const -> Statistics;
 
  private:
   uint32_t referenceCounter;  // Reference counter for LRU
   MemoryManager *memoryManager;
   Cache *lowerCache;
+  Cache *victimCache;
   Policy policy;
   std::vector<Block> blocks;
   Statistics statistics;
+  bool enableFifo;
+  bool enableVictimCache;
 
-  void loadBlockFromLowerLevel(uint32_t addr);
+  void loadBlockFromLowerLevel(uint32_t addr, bool isRead);
   [[nodiscard]] auto getReplacementBlockId(uint32_t begin, uint32_t end) const
       -> uint32_t;
   virtual void writeBlockToLowerLevel(Block &block);
 
   auto isPolicyValid() -> bool;
+  void setInvalid(uint32_t addr);
   static auto isPowerOfTwo(uint32_t n) -> bool;
   static auto log2i(uint32_t val) -> uint32_t;
   auto getTag(uint32_t addr) -> uint32_t;
   auto getId(uint32_t addr) -> uint32_t;
   auto getOffset(uint32_t addr) -> uint32_t;
-  auto getAddr(Block &block) -> uint32_t;
+  [[nodiscard]] auto getAddr(const Block &block) const -> uint32_t;
 };
 
 #endif

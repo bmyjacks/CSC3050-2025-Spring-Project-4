@@ -3,25 +3,40 @@
 
 #include "Cache.h"
 
-namespace MultiLevelCacheConfig {
-constexpr auto L1 = Cache::Policy{.cacheSize = 16 * 1024,  // 16KB
-                                  .blockSize = 64,
-                                  .blockNum = 16 * 1024 / 64,
-                                  .associativity = 1,  // direct-mapped
-                                  .hitLatency = 1,
-                                  .missLatency = 8};
-constexpr auto L2 = Cache::Policy{.cacheSize = 128 * 1024,  // 128KB
-                                  .blockSize = 64,
-                                  .blockNum = 128 * 1024 / 64,
-                                  .associativity = 8,  // 8-way
-                                  .hitLatency = 8,
-                                  .missLatency = 20};
-constexpr auto L3 = Cache::Policy{.cacheSize = 2048 * 1024,  // 2MB
-                                  .blockSize = 64,
-                                  .blockNum = 2048 * 1024 / 64,
-                                  .associativity = 16,  // 16-way
-                                  .hitLatency = 20,
-                                  .missLatency = 100};
-}  // namespace MultiLevelCacheConfig
+class MultiLevelCacheConfig {
+ public:
+  static Cache::Policy getL1Policy() {
+    Cache::Policy policy;
+    policy.cacheSize = 16 * 1024;  // 16KB
+    policy.blockSize = 64;
+    policy.blockNum = policy.cacheSize / policy.blockSize;
+    policy.associativity = 1;  // direct-mapped
+    policy.hitLatency = 1;
+    policy.missLatency = 8;
+    return policy;
+  }
+
+  static Cache::Policy getL2Policy() {
+    Cache::Policy policy;
+    policy.cacheSize = 128 * 1024;  // 128KB
+    policy.blockSize = 64;
+    policy.blockNum = policy.cacheSize / policy.blockSize;
+    policy.associativity = 8;  // 8-way
+    policy.hitLatency = 8;
+    policy.missLatency = 20;
+    return policy;
+  }
+
+  static Cache::Policy getL3Policy() {
+    Cache::Policy policy;
+    policy.cacheSize = 2048 * 1024;  // 2MB
+    policy.blockSize = 64;
+    policy.blockNum = policy.cacheSize / policy.blockSize;
+    policy.associativity = 16;  // 16-way
+    policy.hitLatency = 20;
+    policy.missLatency = 100;
+    return policy;
+  }
+};
 
 #endif

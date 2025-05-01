@@ -1,12 +1,7 @@
-#include <cstdint>
-#include <expected>
 #include <format>
 #include <fstream>
 #include <iostream>
-#include <print>
-#include <ranges>
 #include <string>
-#include <vector>
 
 #include "Cache.h"
 #include "MemoryManager.h"
@@ -31,7 +26,9 @@ static constexpr void parseParameters(const int argc, char** argv,
           enableVictimCache = true;
           break;
         }
-        default:
+        default: {
+          break;
+        }
       }
     } else {
       if (traceFilePath.empty()) {
@@ -78,12 +75,26 @@ class CacheHierarchy {
  public:
   CacheHierarchy(const bool enablePrefetch, const bool enableFifo,
                  const bool enableVictimCache)
-      : l3Cache(&memoryManager, MultiLevelCacheConfig::L3, nullptr),
-        l2Cache(&memoryManager, MultiLevelCacheConfig::L2, &l3Cache),
-        l1Cache(&memoryManager, MultiLevelCacheConfig::L1, &l2Cache),
+      : l3Cache(&memoryManager, MultiLevelCacheConfig::getL3Policy(), nullptr),
+        l2Cache(&memoryManager, MultiLevelCacheConfig::getL2Policy(), &l3Cache),
+        l1Cache(&memoryManager, MultiLevelCacheConfig::getL1Policy(), &l2Cache),
         enablePrefetch(enablePrefetch),
         enableFifo(enableFifo),
-        enableVictimCache(enableVictimCache) {}
+        enableVictimCache(enableVictimCache) {
+    if (enableFifo) {
+      constexpr auto L1_FULLY_ASSOCIATIVE = Cache::Policy{
+          .cacheSize = 16 * 1024,  // 16KB
+          .blockSize = 64,
+          .blockNum = 16 * 1024 / 64,
+          .associativity = 16 * 1024 / 64,  // direct-mapped
+          .hitLatency = 1,
+          .missLatency = 8,
+      };
+      l1Cache = Cache(&memoryManager, L1_FULLY_ASSOCIATIVE, &l2Cache);
+    }
+    l1Cache.setFifo(enableFifo);
+    l1Cache.setVictimCache(enableVictimCache);
+  }
 
   void processMemoryAccess(const char operation, const uint32_t addr) {
     if (!memoryManager.isPageExist(addr)) {
@@ -148,8 +159,8 @@ class CacheHierarchy {
 
     // Write statistic into the table
     outputCacheStats(csvFile, "L1", &l1Cache);
-    // outputCacheStats(csvFile, "L2", &l2Cache);
-    // outputCacheStats(csvFile, "L3", &l3Cache);
+    outputCacheStats(csvFile, "L2", &l2Cache);
+    outputCacheStats(csvFile, "L3", &l3Cache);
 
     csvFile.close();
     std::cout << std::format("\nResults have been written to {}\n", csvPath);
